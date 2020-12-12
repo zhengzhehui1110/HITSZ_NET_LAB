@@ -73,6 +73,26 @@ static uint8_t *arp_lookup(uint8_t *ip)
 static void arp_req(uint8_t *target_ip)
 {
     // TODO
+    buf_t *txbuf;
+    buf_init(txbuf,42);
+    uint8_t *arp_head = txbuf->data;
+    //硬件类型
+    arp_head[0] = 0;
+    arp_head[1] = 1;
+    //上层协议类型
+    arp_head[2] = 0x08;
+    arp_head[3] = 0x06;
+    //MAC 地址长度
+    arp_head[4] = 6;
+    //IP 协议地址长度
+    arp_head[5] = 4;
+    //操作类型：占2字节，指定本次 ARP 报文类型。1标识 ARP 请求报文，2标识 ARP应答报文。
+    arp_head[6] = 0;
+    arp_head[7] = ARP_REQUEST; // ARP 操作类型为 ARP_REQUEST
+
+    uint8_t mac[6] = {0x00,0x00,0x00,0x00,0x00,0x00};
+    // 调用 ethernet_out 函数将 ARP 报文发送出去
+    ethernet_out(txbuf, mac, 0x0806);
 
 }
 
@@ -113,6 +133,8 @@ void arp_in(buf_t *buf)
 void arp_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol)
 {
     // TODO
+    arp_entry_t *p = arp_table;
+    
 
 }
 
