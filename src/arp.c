@@ -88,9 +88,9 @@ static void arp_req(uint8_t *target_ip)
     arp_head[5] = 4;
     //操作类型：占2字节，指定本次 ARP 报文类型。1标识 ARP 请求报文，2标识 ARP应答报文。
     arp_head[6] = 0;
-    arp_head[7] = ARP_REQUEST; // ARP 操作类型为 ARP_REQUEST
+    arp_head[7] = 1; // ARP 操作类型为 ARP_REQUEST
 
-    uint8_t mac[6] = {0x00,0x00,0x00,0x00,0x00,0x00};
+    uint8_t mac[6] = {0x11,0x22,0x33,0x44,0x55,0x66};
     // 调用 ethernet_out 函数将 ARP 报文发送出去
     ethernet_out(txbuf, mac, 0x0806);
 
@@ -133,8 +133,33 @@ void arp_in(buf_t *buf)
 void arp_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol)
 {
     // TODO
-    arp_entry_t *p = arp_table;
+    arp_entry_t *p;
+    int i;
+    for (i = 0; i < ARP_MAX_ENTRY; i++)
+    {
+        p = &arp_table[i];
+        if (p->ip[0]==ip[0] && p->ip[1]==ip[1] && p->ip[2]==ip[2] && p->ip[3]==ip[3])
+        {
+            break;
+        }
+        
+    }
+    // 如果能找到该 IP 地址对应的 MAC 地址，则将数据包直接发送给以太网层，即
+    //调用 ethernet_out 函数直接发出去。
+    if (i < ARP_MAX_ENTRY)
+    {
+        ethernet_out(buf, p->mac, protocol);
+    }
+    //如果没有找到对应的 MAC 地址，则调用 arp_req 函数，发一个 ARP request
+    //报文。
+    else
+    {
+        arp_buf.buf = *buf; //将来自 IP 层的数据包缓存到 arp_buf 的 buf 中
+        arp_req(ip);
+    }
     
+    
+       
 
 }
 
