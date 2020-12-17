@@ -44,8 +44,6 @@ arp_buf_t arp_buf;
  */
 void arp_update(uint8_t *ip, uint8_t *mac, arp_state_t state)
 {
-    printf("\nupdate ip: %d %d %d %d",ip[0],ip[1],ip[2],ip[3]);//test
-    printf("\nupdate mac: %x %x\n",mac[0],mac[1]);//test
     // TODO
     for (int i = 0; i < ARP_MAX_ENTRY; i++)
     {
@@ -65,7 +63,6 @@ void arp_update(uint8_t *ip, uint8_t *mac, arp_state_t state)
             arp_table[i].timeout = time(NULL);
             arp_table[i].state = ARP_VALID;
             flag = 1;
-            //printf("here!!!!!!!!\n");
             break;
         }
     }
@@ -114,17 +111,14 @@ uint8_t all_zero_mac[6] = {0x00,0x00,0x00,0x00,0x00,0x00};
 static void arp_req(uint8_t *target_ip)
 {
     // TODO
-    //printf("target: %d %d\n",target_ip[0],target_ip[3]); //test
     buf_t txbuf;
     buf_init(&txbuf,sizeof(arp_pkt_t));
     arp_pkt_t *arp_head = (arp_pkt_t *)txbuf.data;
     //硬件类型
     memcpy(arp_head->sender_ip,my_ip,sizeof(my_ip));
     memcpy(arp_head->target_ip,target_ip,sizeof(my_ip));
-    //arp_head->opcode = swap16(ARP_REQUEST);
     memcpy(arp_head->sender_mac,default_mac,sizeof(default_mac));
     memcpy(arp_head->target_mac,all_zero_mac,sizeof(all_zero_mac));
-
     arp_head->hw_type = swap16(ARP_HW_ETHER);
     //上层协议类型
     arp_head->pro_type = swap16(NET_PROTOCOL_IP);
@@ -136,8 +130,6 @@ static void arp_req(uint8_t *target_ip)
     arp_head->opcode = swap16(ARP_REQUEST);
     // ARP 操作类型为 ARP_REQUEST
     // 调用 ethernet_out 函数将 ARP 报文发送出去
-    //printf("send a APR request\n");
-    //ethernet_out(&txbuf, default_mac, NET_PROTOCOL_ARP);
     ethernet_out(&txbuf, bc_mac, NET_PROTOCOL_ARP);
 }
 
@@ -186,10 +178,8 @@ void arp_in(buf_t *buf)
         //用 ethernet_out 函数直接发出去。
         if (mac_from_table != NULL)
         {
-            printf("\n3 mac: %x %x\n",mac_from_table[0],mac_from_table[1]); //test
             ethernet_out(&arp_buf.buf,mac_from_table,arp_buf.protocol);
         }
-        
     }
     else
     //判断接收到的报文是否为 ARP_REQUEST 请求报文，并且该请求报文的 target_ip 是本机的 IP
@@ -203,12 +193,10 @@ void arp_in(buf_t *buf)
             buf_t req_buf;
             buf_init(&req_buf,28); //seg fault!
             arp_pkt_t *arp_head = (arp_pkt_t *)req_buf.data;
-            
             memcpy(arp_head->sender_ip,my_ip,sizeof(my_ip));
             memcpy(arp_head->target_ip,arp->sender_ip,sizeof(my_ip));
             memcpy(arp_head->sender_mac,default_mac,sizeof(default_mac));
             memcpy(arp_head->target_mac,arp->sender_mac,sizeof(all_zero_mac));
-
             arp_head->hw_type = swap16(ARP_HW_ETHER);
             //上层协议类型
             arp_head->pro_type = swap16(NET_PROTOCOL_IP);
@@ -218,10 +206,7 @@ void arp_in(buf_t *buf)
             arp_head->pro_len = 4;
             //操作类型：占2字节，指定本次 ARP 报文类型。1标识 ARP 请求报文，2标识 ARP应答报文。
             arp_head->opcode = swap16(ARP_REPLY);
-
-            //printf("\n1 mac: %x %x\n",arp->sender_mac[0],arp->sender_mac[1]); //test
             ethernet_out(&req_buf,arp->sender_mac,NET_PROTOCOL_ARP);
-            
         }
         
     }
@@ -242,25 +227,20 @@ void arp_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol)
 {
     // TODO
     uint8_t *mac_from_table = arp_lookup(ip); //根据 IP 地址来查找 ARP 表 (arp_table)
-    
     // 如果能找到该 IP 地址对应的 MAC 地址，则将数据包直接发送给以太网层，即
     //调用 ethernet_out 函数直接发出去。
     if (mac_from_table != NULL)
     {
-        printf("\n2 mac: %x %x\n",mac_from_table[0],mac_from_table[1]); //test
         ethernet_out(buf, mac_from_table, protocol);
     }
     //如果没有找到对应的 MAC 地址，则调用 arp_req 函数，发一个 ARP request
     //报文。
     else
     {
-        
-        //arp_buf.buf = *buf; //将来自 IP 层的数据包缓存到 arp_buf 的 buf 中
         memcpy(&arp_buf.buf,buf,sizeof(buf_t));
         arp_buf.valid = 1;
         memcpy(arp_buf.ip,ip,sizeof(ip));
         memcpy(&arp_buf.protocol,&protocol,sizeof(protocol));
-        //printf("\nrequest: %d %d\n",ip[0],ip[3]);
         arp_req(ip);
     }
 }
