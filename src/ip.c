@@ -24,6 +24,38 @@
 void ip_in(buf_t *buf)
 {
     // TODO 
+    struct ip_hdr * ip_buf = (struct ip_hdr *)buf;
+    //报头检查
+    if(ip_buf->hdr_len < 5 &&
+    ip_buf->version != 4 && ip_buf->version != 6 &&
+    ip_buf->total_len < swap16(20)){
+        printf("incorrect header\n");
+        return;
+    }
+    uint16_t checknum = checksum16((uint16_t *)buf,10); //调用 checksum函数来计算头部校验和
+    if(ip_buf->hdr_checksum != swap16(checknum)){
+        printf("incorrect checksum\n");
+        return;
+    }
+    //对比目的 IP 地址是否为本机的 IP 地址
+    if(memcmp(ip_buf->dest_ip,net_if_ip,sizeof(net_if_ip))!=0){
+        printf("incorrect ip\n");
+        return;
+    }
+    //调用 buf_remove_header 去掉 IP 报头
+    uint8_t src_ip[4];
+    memcpy(src_ip,ip_buf->src_ip,sizeof(src_ip));
+    if(ip_buf->protocol == NET_PROTOCOL_UDP){
+        buf_remove_header(buf,20);
+        udp_in(buf,src_ip);
+    }
+    else if(ip_buf->protocol == NET_PROTOCOL_ICMP){
+        buf_remove_header(buf,20);
+        icmp_in(buf,src_ip);
+    }
+    else{ //不能识别的协议类型，调用 icmp_unreachable 返回 ICMP 协议不可达信息。
+        icmp_unreachable(buf,ip_buf->src_ip,ICMP_CODE_PROTOCOL_UNREACH);
+    }
 
 }
 
