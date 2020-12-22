@@ -100,5 +100,17 @@ void ip_fragment_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol, int id, u
 void ip_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol)
 {
     // TODO 
-    
+    // 检查从上层传递下来的数据报包长是否大于以太网帧的最大包长1500-14
+    struct ip_hdr * ip_buf = (struct ip_hdr *)buf;
+    struct ip_hdr ip_head;
+    memcpy(&ip_head,buf,sizeof(ip_head));
+    //如果超过以太网帧的最大包长，则需要分片发送
+    if(ip_buf->total_len > ETHERNET_MTU-14){
+        buf_t * new_buf;
+        int piece_num = (ip_buf->total_len%(ETHERNET_MTU-14)==0)?
+        ip_buf->total_len/(ETHERNET_MTU-14):ip_buf->total_len/(ETHERNET_MTU-14)+1;
+        
+    }
+
+
 }
