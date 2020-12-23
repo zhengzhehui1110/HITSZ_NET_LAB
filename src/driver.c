@@ -7,6 +7,8 @@
 static pcap_t *pcap;
 static char pcap_errbuf[PCAP_ERRBUF_SIZE];
 
+# define PCAP_BUF_SIZE (65535)
+
 /**
  * @brief 打开网卡
  * 

@@ -93,9 +93,9 @@ void ip_fragment_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol, int id, u
     memcpy(ip_buf->dest_ip,ip,sizeof(ip_buf->dest_ip));
     memcpy(ip_buf->src_ip,net_if_ip,sizeof(ip_buf->src_ip));
     if(!(mf==0 && offset==0)){
-        ip_buf->flags_fragment = (offset >> 3)+(mf << 13);
+        ip_buf->flags_fragment = swap16((offset)+(mf << 13));
     }
-    
+    ip_buf->hdr_checksum =0;
     ip_buf->hdr_checksum = checksum16((uint16_t *)buf->data,20);
     arp_out(buf,ip,NET_PROTOCOL_IP);
     
@@ -127,28 +127,33 @@ void ip_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol)
     struct ip_hdr * ip_buf = (struct ip_hdr *)buf->data;
     struct ip_hdr ip_head;
     memcpy(&ip_head,buf,sizeof(ip_head));
+    
     uint16_t offset = 0; //ip fragment offset
     //如果超过以太网帧的最大包长，则需要分片发送
-    if(buf->len > ETHERNET_MTU-14){
+    if(buf->len > 1480){
+        
         buf_t new_buf;
         uint8_t * p = buf->data;
-        int piece_num = (ip_buf->total_len%(ETHERNET_MTU-14)==0)?
-        ip_buf->total_len/(ETHERNET_MTU-14):ip_buf->total_len/(ETHERNET_MTU-14)+1;
-        for(int i = 0;i < piece_num;i++){
-            buf_init(&new_buf,(ETHERNET_MTU-14));
-            memcpy(new_buf.data,p,ETHERNET_MTU-14);
-            p += ETHERNET_MTU-14;
-            new_buf.len = ETHERNET_MTU-14;
+        int piece_num = (buf->len%(1480)==0)?
+        buf->len/1480:buf->len/1480+1;
+        
+        for(int i = 0;i < piece_num-1;i++){
+            buf_init(&new_buf,1480);
+            memcpy(new_buf.data,p,1480);
+            p += 1480;
+            new_buf.len = 1480;
             ip_fragment_out(&new_buf,ip,protocol,id,offset,1);
             offset += 185;
+            
         }
-        int len = buf->len - (ETHERNET_MTU-14) * (piece_num-1);
-        buf_init(&new_buf,len);
+        
+        int len = buf->len - (1480) * (piece_num-1);
+        memset(&new_buf,0,sizeof(new_buf));
+        buf_init(&new_buf,len);      
         memcpy(new_buf.data,p,len);
-        //memcpy(&ip_buf,buf,len);
+        
         new_buf.len = len;
         ip_fragment_out(&new_buf,ip,protocol,id,offset,0);
-        
 
     }
     else{ //没有超过以太网帧的最大包长，则直接调用 ip_fragment_out 函数
