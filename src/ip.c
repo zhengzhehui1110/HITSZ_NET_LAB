@@ -24,7 +24,7 @@
 void ip_in(buf_t *buf)
 {
     // TODO 
-    struct ip_hdr * ip_buf = (struct ip_hdr *)buf;
+    struct ip_hdr * ip_buf = (struct ip_hdr *)buf->data;
     //报头检查
     if(ip_buf->hdr_len < 5 &&
     ip_buf->version != 4 && ip_buf->version != 6 &&
@@ -32,8 +32,11 @@ void ip_in(buf_t *buf)
         printf("incorrect header\n");
         return;
     }
-    uint16_t checknum = checksum16((uint16_t *)buf,10); //调用 checksum函数来计算头部校验和
-    if(ip_buf->hdr_checksum != swap16(checknum)){
+    uint16_t my_checksum = ip_buf->hdr_checksum;
+    ip_buf->hdr_checksum = 0;
+    uint16_t checknum = checksum16((uint16_t *)buf->data,ip_buf->hdr_len*4);
+    //调用 checksum函数来计算头部校验和
+    if(my_checksum != checknum){
         printf("incorrect checksum\n");
         return;
     }
@@ -54,6 +57,7 @@ void ip_in(buf_t *buf)
         icmp_in(buf,src_ip);
     }
     else{ //不能识别的协议类型，调用 icmp_unreachable 返回 ICMP 协议不可达信息。
+        ip_buf->hdr_checksum = checknum;
         icmp_unreachable(buf,ip_buf->src_ip,ICMP_CODE_PROTOCOL_UNREACH);
     }
 
@@ -76,6 +80,24 @@ void ip_in(buf_t *buf)
 void ip_fragment_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol, int id, uint16_t offset, int mf)
 {
     // TODO
+    buf_add_header(buf,20);
+    struct ip_hdr *ip_buf = (struct ip_hdr *)buf->data;
+    ip_buf->hdr_len = 5;
+    ip_buf->version = IP_VERSION_4;
+    ip_buf->total_len = swap16(buf->len);
+    ip_buf->id = swap16(id); // 标识
+    ip_buf->tos = 0; //服务类型
+    ip_buf->ttl = 64; // 生存时间常设置为 64
+    ip_buf->protocol = protocol;
+    ip_buf->flags_fragment = 0;
+    memcpy(ip_buf->dest_ip,ip,sizeof(ip_buf->dest_ip));
+    memcpy(ip_buf->src_ip,net_if_ip,sizeof(ip_buf->src_ip));
+    if(!(mf==0 && offset==0)){
+        ip_buf->flags_fragment = (offset >> 3)+(mf << 13);
+    }
+    
+    ip_buf->hdr_checksum = checksum16((uint16_t *)buf->data,20);
+    arp_out(buf,ip,NET_PROTOCOL_IP);
     
 }
 
@@ -97,20 +119,41 @@ void ip_fragment_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol, int id, u
  * @param ip 目标ip地址
  * @param protocol 上层协议
  */
+int id = 0;
 void ip_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol)
 {
     // TODO 
     // 检查从上层传递下来的数据报包长是否大于以太网帧的最大包长1500-14
-    struct ip_hdr * ip_buf = (struct ip_hdr *)buf;
+    struct ip_hdr * ip_buf = (struct ip_hdr *)buf->data;
     struct ip_hdr ip_head;
     memcpy(&ip_head,buf,sizeof(ip_head));
+    uint16_t offset = 0; //ip fragment offset
     //如果超过以太网帧的最大包长，则需要分片发送
-    if(ip_buf->total_len > ETHERNET_MTU-14){
-        buf_t * new_buf;
+    if(buf->len > ETHERNET_MTU-14){
+        buf_t new_buf;
+        uint8_t * p = buf->data;
         int piece_num = (ip_buf->total_len%(ETHERNET_MTU-14)==0)?
         ip_buf->total_len/(ETHERNET_MTU-14):ip_buf->total_len/(ETHERNET_MTU-14)+1;
+        for(int i = 0;i < piece_num;i++){
+            buf_init(&new_buf,(ETHERNET_MTU-14));
+            memcpy(new_buf.data,p,ETHERNET_MTU-14);
+            p += ETHERNET_MTU-14;
+            new_buf.len = ETHERNET_MTU-14;
+            ip_fragment_out(&new_buf,ip,protocol,id,offset,1);
+            offset += 185;
+        }
+        int len = buf->len - (ETHERNET_MTU-14) * (piece_num-1);
+        buf_init(&new_buf,len);
+        memcpy(new_buf.data,p,len);
+        //memcpy(&ip_buf,buf,len);
+        new_buf.len = len;
+        ip_fragment_out(&new_buf,ip,protocol,id,offset,0);
         
-    }
 
+    }
+    else{ //没有超过以太网帧的最大包长，则直接调用 ip_fragment_out 函数
+        ip_fragment_out(buf,ip,protocol,id,0,0);
+    }
+    id++;
 
 }

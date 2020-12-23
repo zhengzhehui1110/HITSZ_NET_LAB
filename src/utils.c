@@ -85,8 +85,10 @@ uint16_t checksum16(uint16_t *buf, int len)
     // TODO
     uint32_t sum1 = 0;
     uint16_t *p = buf;
-    for(int i = 0;i < len;i++,p++){
+    
+    for(int i = 0;i < len/2;i++,p++){
         sum1 += *p;
+        //printf("p:%x\n",*p);//test
     }
     uint32_t sum2 = (sum1 & 0xffff)+(sum1 >> 16);
     sum2 += sum2 >> 16;
