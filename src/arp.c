@@ -171,7 +171,7 @@ void arp_in(buf_t *buf)
     arp_update(arp->sender_ip,arp->sender_mac,ARP_VALID);
     if (arp_buf.valid == ARP_VALID)
     {
-        arp_buf.valid = 0;
+        
         uint8_t *mac_from_table = arp_lookup(arp_buf.ip); //根据 IP 地址来查找 ARP 表 (arp_table)
         //如果能找到该 IP
         //地址对应的 MAC 地址，则将缓存的数据包 arp_buf 再发送给以太网层，即调
@@ -179,6 +179,7 @@ void arp_in(buf_t *buf)
         if (mac_from_table != NULL)
         {
             ethernet_out(&arp_buf.buf,mac_from_table,arp_buf.protocol);
+            arp_buf.valid = 0;
         }
     }
     else
@@ -237,7 +238,7 @@ void arp_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol)
     //报文。
     else
     {
-        memcpy(&arp_buf.buf,buf,sizeof(buf_t));
+        buf_copy(&arp_buf.buf,buf);
         arp_buf.valid = 1;
         memcpy(arp_buf.ip,ip,sizeof(ip));
         memcpy(&arp_buf.protocol,&protocol,sizeof(protocol));

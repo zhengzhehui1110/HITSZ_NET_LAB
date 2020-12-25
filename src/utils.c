@@ -90,6 +90,9 @@ uint16_t checksum16(uint16_t *buf, int len)
         sum1 += *p;
         //printf("p:%x\n",*p);//test
     }
+    if(len % 2 ==1){
+        sum1 += (*p << 8) & 0x00;
+    }
     uint32_t sum2 = (sum1 & 0xffff)+(sum1 >> 16);
     sum2 += sum2 >> 16;
     uint16_t ans = ~sum2 & 0xffff;

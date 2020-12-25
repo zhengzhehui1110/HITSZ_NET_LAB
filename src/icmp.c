@@ -17,9 +17,30 @@
  * @param buf 要处理的数据包
  * @param src_ip 源ip地址
  */
+
 void icmp_in(buf_t *buf, uint8_t *src_ip)
 {
     // TODO
+    icmp_hdr_t *icmp_head = (icmp_hdr_t *)buf->data;
+    if(icmp_head->type==ICMP_TYPE_ECHO_REQUEST ){ //查看该报文的 ICMP 类型是否为回显请求
+        //buf_t txbuf;
+        buf_init(&txbuf,buf->len);
+        icmp_hdr_t *icmp_tx = (icmp_hdr_t *)txbuf.data;
+        memcpy(txbuf.data,buf->data,buf->len);
+
+        //icmp_tx->type = 0;
+        icmp_tx->type = ICMP_TYPE_ECHO_REPLY; //回显应答
+        icmp_tx->checksum = 0;
+        //icmp_tx->id = swap16(1);
+        //icmp_tx->seq = swap16(seq);
+        //seq++;
+        
+        //memcpy(&txbuf.data+8,buf->data+8,buf->len-8); //数据部分
+        icmp_tx->checksum = checksum16((uint16_t *)txbuf.data,buf->len);
+        ip_out(&txbuf,src_ip,NET_PROTOCOL_ICMP); // 调用 ip_out 函数将数据报发送出去。
+
+    }
+
 }
 
 /**
@@ -36,5 +57,22 @@ void icmp_in(buf_t *buf, uint8_t *src_ip)
 void icmp_unreachable(buf_t *recv_buf, uint8_t *src_ip, icmp_code_t code)
 {
     // TODO
-    
+    buf_t txbuf;
+    buf_init(&txbuf,sizeof(icmp_hdr_t) + sizeof(ip_hdr_t) + 8);
+    uint8_t * p = txbuf.data;
+
+    icmp_hdr_t *icmp_head = (icmp_hdr_t *)p;
+    icmp_head->type=ICMP_TYPE_UNREACH;
+    icmp_head->code=code;
+    icmp_head->checksum=0;
+    icmp_head->id =0;
+    icmp_head->seq = 0;
+
+    p += sizeof(icmp_hdr_t);
+    memcpy(p,(uint8_t *)recv_buf->data,sizeof(ip_hdr_t)+8);
+
+    icmp_head->checksum = checksum16((uint16_t *)txbuf.data,txbuf.len);
+    ip_out(&txbuf,src_ip,NET_PROTOCOL_ICMP);
+
 }
+
