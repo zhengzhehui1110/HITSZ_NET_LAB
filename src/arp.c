@@ -103,10 +103,10 @@ static uint8_t *arp_lookup(uint8_t *ip)
  * 
  * @param target_ip 想要知道的目标的ip地址
  */
-uint8_t default_mac[6] = {0x11,0x22,0x33,0x44,0x55,0x66};
-uint8_t bc_mac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
-uint8_t my_ip[4] = {192, 168, 163, 103};
-uint8_t all_zero_mac[6] = {0x00,0x00,0x00,0x00,0x00,0x00};
+//uint8_t default_mac[6] = {0x11,0x22,0x33,0x44,0x55,0x66};
+//uint8_t bc_mac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
+//uint8_t net_if_ip[4] = {192, 168, 163, 103};
+uint8_t blk_mac[6] = {0x00,0x00,0x00,0x00,0x00,0x00};
 
 static void arp_req(uint8_t *target_ip)
 {
@@ -115,10 +115,10 @@ static void arp_req(uint8_t *target_ip)
     buf_init(&txbuf,sizeof(arp_pkt_t));
     arp_pkt_t *arp_head = (arp_pkt_t *)txbuf.data;
     //硬件类型
-    memcpy(arp_head->sender_ip,my_ip,sizeof(my_ip));
-    memcpy(arp_head->target_ip,target_ip,sizeof(my_ip));
-    memcpy(arp_head->sender_mac,default_mac,sizeof(default_mac));
-    memcpy(arp_head->target_mac,all_zero_mac,sizeof(all_zero_mac));
+    memcpy(arp_head->sender_ip,net_if_ip,sizeof(net_if_ip));
+    memcpy(arp_head->target_ip,target_ip,sizeof(net_if_ip));
+    memcpy(arp_head->sender_mac,net_if_mac,sizeof(net_if_mac));
+    memcpy(arp_head->target_mac,blk_mac,sizeof(blk_mac));
     arp_head->hw_type = swap16(ARP_HW_ETHER);
     //上层协议类型
     arp_head->pro_type = swap16(NET_PROTOCOL_IP);
@@ -130,7 +130,7 @@ static void arp_req(uint8_t *target_ip)
     arp_head->opcode = swap16(ARP_REQUEST);
     // ARP 操作类型为 ARP_REQUEST
     // 调用 ethernet_out 函数将 ARP 报文发送出去
-    ethernet_out(&txbuf, bc_mac, NET_PROTOCOL_ARP);
+    ethernet_out(&txbuf, ether_broadcast_mac, NET_PROTOCOL_ARP);
 }
 
 /**
@@ -194,10 +194,10 @@ void arp_in(buf_t *buf)
             buf_t req_buf;
             buf_init(&req_buf,28); //seg fault!
             arp_pkt_t *arp_head = (arp_pkt_t *)req_buf.data;
-            memcpy(arp_head->sender_ip,my_ip,sizeof(my_ip));
-            memcpy(arp_head->target_ip,arp->sender_ip,sizeof(my_ip));
-            memcpy(arp_head->sender_mac,default_mac,sizeof(default_mac));
-            memcpy(arp_head->target_mac,arp->sender_mac,sizeof(all_zero_mac));
+            memcpy(arp_head->sender_ip,net_if_ip,sizeof(net_if_ip));
+            memcpy(arp_head->target_ip,arp->sender_ip,sizeof(net_if_ip));
+            memcpy(arp_head->sender_mac,net_if_mac,sizeof(net_if_mac));
+            memcpy(arp_head->target_mac,arp->sender_mac,sizeof(blk_mac));
             arp_head->hw_type = swap16(ARP_HW_ETHER);
             //上层协议类型
             arp_head->pro_type = swap16(NET_PROTOCOL_IP);
