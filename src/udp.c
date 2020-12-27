@@ -30,9 +30,10 @@ static uint16_t udp_checksum(buf_t *buf, uint8_t *src_ip, uint8_t *dest_ip)
 {
     // TODO
     //icmp_hdr_t *icmp_head = (icmp_hdr_t *)buf->data;
-    uint16_t len = buf->len;// udp 数据包本身的长度
-    ip_hdr_t *ip_head = (ip_hdr_t *)(buf->data - sizeof(ip_hdr_t));
-    uint8_t protocol = ip_head->protocol;
+    //uint16_t len = buf->len;// udp 数据包本身的长度
+    //ip_hdr_t *ip_head = (ip_hdr_t *)(buf->data - sizeof(ip_hdr_t));
+    //uint8_t protocol = ip_head->protocol;
+    udp_hdr_t * udp_head = (udp_hdr_t *)buf->data;
     buf_add_header(buf,sizeof(udp_peso_hdr_t)); //调用 buf_add_header 增加 UDP 报头
     udp_peso_hdr_t *fake_head = (udp_peso_hdr_t *)buf->data;
     udp_peso_hdr_t ip_head_buf;
@@ -41,8 +42,8 @@ static uint16_t udp_checksum(buf_t *buf, uint8_t *src_ip, uint8_t *dest_ip)
     memcpy(fake_head->src_ip,src_ip,sizeof(fake_head->src_ip));
     memcpy(fake_head->dest_ip,dest_ip,sizeof(fake_head->dest_ip));
     fake_head->placeholder = 0;
-    fake_head->total_len = len;
-    fake_head->protocol = protocol;
+    fake_head->total_len = udp_head->total_len;
+    fake_head->protocol = NET_PROTOCOL_UDP;
     uint16_t checksum = checksum16((uint16_t *)buf->data,buf->len);//计算 UDP 校验和
     memcpy(fake_head,&ip_head_buf,sizeof(udp_peso_hdr_t));//将暂存的 IP 头部拷贝回来
     buf_remove_header(buf,sizeof(udp_peso_hdr_t));//调用 buf_remove_header 函数去掉 UDP 伪头部
@@ -78,20 +79,22 @@ void udp_in(buf_t *buf, uint8_t *src_ip)
     udp_hdr_t *udp_head = (udp_hdr_t *)buf->data;
     uint16_t my_checksum = udp_head->checksum;
     udp_head->checksum = 0;
-    uint16_t checksum = udp_checksum(buf->data,src_ip,net_if_ip);//重新计算 checksum
+    uint16_t checksum = udp_checksum(buf,src_ip,net_if_ip);//重新计算 checksum
     if(checksum != my_checksum) return; //校验和不相等
     for(int i = 0;i < UDP_MAX_HANDLER;i++){//根据 UDP 数据报中的目的端口号查找 udp_table
-        if(udp_table[i].port == udp_head->dest_port && udp_table[i].valid==1){
+        if(udp_table[i].port == swap16(udp_head->dest_port) && udp_table[i].valid==1){
             //如果能找到，则去掉 UDP 包头，接着调用处理函数（回调函数）来做相应处理
+            //uint16_t len = buf->len-8;
             buf_remove_header(buf,8);
-            udp_table[i].handler(&udp_table[i],src_ip,udp_head->src_port,buf);
+            buf->len = swap16(udp_head ->total_len)-8;
+            udp_table[i].handler(&udp_table[i],src_ip,swap16(udp_head->src_port),buf);
             return;
         }
     }
 // 如果没有找到该目的端口号对应的处理函数
-    buf_add_header(buf,20);//增加IPv4 数据报头部
+    buf_add_header(buf,sizeof(ip_hdr_t));//增加IPv4 数据报头部
     //调用 icmp_unreachable 发送一个端口不可达的 ICMP 差错报文
-    icmp_unreachable(buf,src_ip,ICMP_CODE_PROTOCOL_UNREACH);
+    icmp_unreachable(buf,src_ip,ICMP_CODE_PORT_UNREACH);
 
 
 }
@@ -111,13 +114,13 @@ void udp_in(buf_t *buf, uint8_t *src_ip)
 void udp_out(buf_t *buf, uint16_t src_port, uint8_t *dest_ip, uint16_t dest_port)
 {
     // TODO
-    buf_add_header(buf,8);//调用 buf_add_header 增加 UDP 报头
+    buf_add_header(buf,sizeof(udp_hdr_t));//调用 buf_add_header 增加 UDP 报头
     udp_hdr_t *udp_head = (udp_hdr_t *)buf->data;// 填充 UDP 首部字段
     udp_head->src_port = swap16(src_port);
     udp_head->dest_port = swap16(dest_port);
     udp_head->checksum = 0;
-    udp_head->total_len = buf->len;
-    udp_checksum(buf->data,net_if_ip,dest_ip);//调用 udp_checksum 函数计算校验和
+    udp_head->total_len = swap16(buf->len);
+    udp_checksum(buf,net_if_ip,dest_ip);//调用 udp_checksum 函数计算校验和
     ip_out(buf,dest_ip,NET_PROTOCOL_UDP);//调用 ip_out 函数发送 UDP 数据报
 
 
